@@ -7,33 +7,55 @@ const AuthModal = ({ onLogin, onClose }) => {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Clear fields when toggling mode
+  const handleToggleMode = () => {
+    setIsSignUp((prev) => !prev);
+    setEmail("");
+    setPassword("");
+    setName("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) return;
+
+    if (!email || !password || (isSignUp && !name)) {
+      alert("Please fill in all required fields.");
+      return;
+    }
 
     setLoading(true);
 
     const endpoint = isSignUp ? "?action=signup" : "?action=login";
-    const payload = isSignUp ? { name, email, password } : { email, password };
+    const payload = isSignUp 
+      ? { name: name.trim(), email: email.trim(), password } 
+      : { email: email.trim(), password };
 
     try {
       const res = await fetch(`http://localhost/todo-api/api.php${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
+
       if (!res.ok) {
         alert(data.error || "Authentication failed");
         setLoading(false);
         return;
       }
 
-      onLogin(data.user);
+      if (data.user) {
+        onLogin(data.user);
+      } else {
+        alert("Unexpected response from server.");
+      }
     } catch (err) {
       console.error("Auth Error:", err);
-      alert("Server error. Check PHP connection.");
+      alert("Server error. Check PHP backend connection.");
     } finally {
       setLoading(false);
     }
@@ -44,6 +66,7 @@ const AuthModal = ({ onLogin, onClose }) => {
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl space-y-6 text-white relative">
         <button
           onClick={onClose}
+          type="button"
           className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 text-sm"
         >
           ✕
@@ -73,9 +96,9 @@ const AuthModal = ({ onLogin, onClose }) => {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Daniel"
+                placeholder="Daniel Williams"
                 className="w-full px-3.5 py-2.5 bg-slate-800/80 rounded-xl border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                required
+                required={isSignUp}
               />
             </div>
           )}
@@ -122,7 +145,7 @@ const AuthModal = ({ onLogin, onClose }) => {
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={handleToggleMode}
               className="text-blue-400 font-semibold hover:underline"
             >
               {isSignUp ? "Log In" : "Sign Up"}

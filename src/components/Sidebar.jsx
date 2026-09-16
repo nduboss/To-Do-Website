@@ -29,7 +29,7 @@ function Sidebar({
         />
       )}
 
-      {/* Sidebar Container - Controlled by isOpen on all screen sizes */}
+      {/* Sidebar Container */}
       <aside
         className={`fixed top-0 left-0 h-full w-64 bg-slate-900 text-slate-300 z-40 flex flex-col justify-between p-4 border-r border-slate-800 transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "-translate-x-full md:-translate-x-64"
@@ -46,7 +46,7 @@ function Sidebar({
                 Taskify
               </span>
             </div>
-            
+
             {/* Collapse/Close Toggle Button */}
             <button
               type="button"
@@ -135,7 +135,7 @@ function Sidebar({
                 className="relative cursor-pointer shrink-0"
                 title="Change Avatar"
               >
-                {userProfile.avatarUrl ? (
+                {userProfile?.avatarUrl ? (
                   <img
                     src={userProfile.avatarUrl}
                     alt={userProfile.name}
@@ -143,7 +143,9 @@ function Sidebar({
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm border-2 border-blue-500">
-                    {userProfile.name ? userProfile.name.charAt(0).toUpperCase() : "D"}
+                    {userProfile?.name
+                      ? userProfile.name.charAt(0).toUpperCase()
+                      : "D"}
                   </div>
                 )}
                 <input
@@ -161,10 +163,10 @@ function Sidebar({
                 title="Click to edit name or email"
               >
                 <h4 className="text-xs font-bold text-white truncate group-hover:text-blue-400 transition-colors">
-                  {userProfile.name}
+                  {userProfile?.name}
                 </h4>
                 <p className="text-[10px] text-slate-400 truncate">
-                  {userProfile.email}
+                  {userProfile?.email}
                 </p>
               </div>
             </div>

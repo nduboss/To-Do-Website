@@ -7,7 +7,7 @@ import AuthModal from "./components/AuthModal";
 import TaskTimer from "./components/TaskTimer";
 import "material-icons/iconfont/material-icons.css";
 
-const API_URL = "http://localhost/todo-api/api.php";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost/todo-api/api.php";
 
 const getTodayString = () => new Date().toISOString().split("T")[0];
 
