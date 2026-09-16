@@ -4,6 +4,7 @@ import MiniCalendar from "./components/MiniCalendar";
 import QuoteCard from "./components/QuoteCard";
 import LandingPage from "./components/LandingPage";
 import AuthModal from "./components/AuthModal";
+import TaskTimer from "./components/TaskTimer";
 import "material-icons/iconfont/material-icons.css";
 
 const API_URL = "http://localhost/todo-api/api.php";
@@ -50,12 +51,14 @@ const isTaskOverdue = (dateStr, completed) => {
   return taskDate < today;
 };
 
-function App() {
-  const [currentView, setCurrentView] = useState("landing");
+export default function App() {
+  const [currentView, setCurrentView] = useState("dashboard");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const [authUser, setAuthUser] = useState(() => {
     const savedUser = localStorage.getItem("authUser");
-    return savedUser ? JSON.parse(savedUser) : null;
+    return savedUser ? JSON.parse(savedUser) : { id: 1, name: "NDUKA DANIEL WILLIAMS", email: "danielnduka45@gmail.com" };
   });
 
   const [todos, setTodos] = useState([]);
@@ -64,47 +67,117 @@ function App() {
   const [selectedProject, setSelectedProject] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem("theme") === "dark";
+    return localStorage.getItem("theme") === "dark" || true;
   });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDarkMode]);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode((prev) => !prev);
+  };
 
   const [userProfile, setUserProfile] = useState(() => {
     const savedProfile = localStorage.getItem("userProfile");
-    return savedProfile
-      ? JSON.parse(savedProfile)
-      : { name: "Daniel", email: "daniel@example.com", avatarUrl: "" };
+    if (savedProfile) return JSON.parse(savedProfile);
+
+    const savedUser = localStorage.getItem("authUser");
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      return {
+        name: user.name || "NDUKA DANIEL WILLIAMS",
+        email: user.email || "danielnduka45@gmail.com",
+        avatarUrl: user.avatarUrl || user.avatar || "",
+      };
+    }
+    return { name: "NDUKA DANIEL WILLIAMS", email: "danielnduka45@gmail.com", avatarUrl: "" };
   });
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", email: "" });
 
+  const handleOpenProfileModal = () => {
+    setProfileForm({ name: userProfile.name, email: userProfile.email });
+    setIsProfileModalOpen(true);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    const updated = {
+      ...userProfile,
+      name: profileForm.name,
+      email: profileForm.email,
+    };
+
+    setUserProfile(updated);
+    localStorage.setItem("userProfile", JSON.stringify(updated));
+
+    if (authUser) {
+      const updatedAuth = {
+        ...authUser,
+        name: profileForm.name,
+        email: profileForm.email,
+      };
+      setAuthUser(updatedAuth);
+      localStorage.setItem("authUser", JSON.stringify(updatedAuth));
+
+      try {
+        await fetch(`${API_URL}?action=update_profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: authUser.id,
+            name: profileForm.name,
+            email: profileForm.email,
+          }),
+        });
+      } catch (err) {
+        console.error("Error updating profile on server:", err);
+      }
+    }
+    setIsProfileModalOpen(false);
+  };
+
   const [project, setProject] = useState("Personal");
   const [priority, setPriority] = useState("medium");
   const [dueDate, setDueDate] = useState(getTodayString());
 
-  const [editingTodo, setEditingTodo] = useState(null);
-
   const handleLogin = (user) => {
-    setAuthUser(user);
-    localStorage.setItem("authUser", JSON.stringify(user));
+    setIsLoggingIn(true);
+    setTimeout(() => {
+      setAuthUser(user);
+      localStorage.setItem("authUser", JSON.stringify(user));
 
-    const updatedProfile = {
-      ...userProfile,
-      name: user.name,
-      email: user.email,
-    };
-    setUserProfile(updatedProfile);
-    localStorage.setItem("userProfile", JSON.stringify(updatedProfile));
+      const freshProfile = {
+        name: user.name || "User",
+        email: user.email || "user@example.com",
+        avatarUrl: user.avatarUrl || user.avatar || "",
+      };
+      setUserProfile(freshProfile);
+      localStorage.setItem("userProfile", JSON.stringify(freshProfile));
 
-    setIsAuthModalOpen(false);
-    setCurrentView("dashboard");
+      setIsLoggingIn(false);
+      setIsAuthModalOpen(false);
+      setCurrentView("dashboard");
+    }, 1000);
   };
 
   const handleLogout = () => {
     setAuthUser(null);
+    setUserProfile({ name: "", email: "", avatarUrl: "" });
     localStorage.removeItem("authUser");
+    localStorage.removeItem("userProfile");
     setCurrentView("landing");
   };
 
@@ -116,65 +189,25 @@ function App() {
     }
   };
 
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const updatedProfile = { ...userProfile, avatarUrl: reader.result };
-      setUserProfile(updatedProfile);
-      localStorage.setItem("userProfile", JSON.stringify(updatedProfile));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const openProfileModal = () => {
-    setProfileForm({ name: userProfile.name, email: userProfile.email });
-    setIsProfileModalOpen(true);
-  };
-
-  const handleSaveProfile = (e) => {
-    e.preventDefault();
-    if (!profileForm.name.trim()) return;
-
-    const updatedProfile = {
-      ...userProfile,
-      name: profileForm.name.trim(),
-      email: profileForm.email.trim(),
-    };
-
-    setUserProfile(updatedProfile);
-    localStorage.setItem("userProfile", JSON.stringify(updatedProfile));
-    setIsProfileModalOpen(false);
-  };
-
-  const toggleDarkMode = () => {
-    setIsDarkMode((prev) => !prev);
-  };
-
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.add("dark");
-      localStorage.setItem("theme", "dark");
+    if (authUser) {
+      fetchTodos();
     } else {
-      root.classList.remove("dark");
-      localStorage.setItem("theme", "light");
+      setTodos([]);
     }
-  }, [isDarkMode]);
-
-  useEffect(() => {
-    fetchTodos();
-  }, []);
+  }, [authUser]);
 
   const fetchTodos = async () => {
+    const userId = authUser ? authUser.id : 1;
     try {
-      const res = await fetch(API_URL);
+      const res = await fetch(`${API_URL}?action=get_tasks&user_id=${userId}`);
+      if (!res.ok) throw new Error("API server returned error");
       const data = await res.json();
-      setTodos(data);
+
+      setTodos(Array.isArray(data.tasks) ? data.tasks : []);
     } catch (err) {
       console.error("Error fetching tasks:", err);
+      setTodos([]);
     }
   };
 
@@ -182,21 +215,43 @@ function App() {
     e.preventDefault();
     if (!taskInput.trim()) return;
 
+    const userId = authUser ? authUser.id : 1;
+    const currentSelectedProject = project;
+
     const payload = {
-      task: taskInput,
-      project: project,
+      user_id: userId,
+      title: taskInput.trim(),
+      project: currentSelectedProject,
       priority: priority,
       due_date: dueDate,
     };
 
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch(`${API_URL}?action=add_task`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const newTodo = await res.json();
-      setTodos([newTodo, ...todos]);
+      const data = await res.json();
+
+      const newTask = data.task
+        ? {
+            ...data.task,
+            project: currentSelectedProject,
+            priority: priority,
+            due_date: dueDate,
+          }
+        : {
+            id: Date.now(),
+            task: taskInput.trim(),
+            title: taskInput.trim(),
+            project: currentSelectedProject,
+            priority: priority,
+            due_date: dueDate,
+            completed: 0,
+          };
+
+      setTodos((prevTodos) => [newTask, ...prevTodos]);
       setTaskInput("");
       setDueDate(getTodayString());
     } catch (err) {
@@ -204,81 +259,72 @@ function App() {
     }
   };
 
-  const handleToggleTodo = async (id, currentStatus) => {
-    const newStatus = Number(currentStatus) === 1 ? 0 : 1;
-
+  const handleToggleTodo = async (id, currentCompleted) => {
     try {
-      await fetch(API_URL, {
+      const res = await fetch(`${API_URL}?action=toggle_task`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, completed: newStatus }),
+        body: JSON.stringify({
+          id: id,
+          completed: !currentCompleted,
+        }),
       });
+      const data = await res.json();
 
-      setTodos(
-        todos.map((todo) =>
-          todo.id === id ? { ...todo, completed: newStatus } : todo,
-        ),
-      );
+      if (data.success || res.ok) {
+        setTodos((prev) =>
+          prev.map((todo) =>
+            todo.id === id ? { ...todo, completed: !currentCompleted } : todo
+          )
+        );
+      }
     } catch (err) {
       console.error("Error updating status:", err);
     }
   };
 
-  const handleSaveEdit = async (e) => {
-    e.preventDefault();
-    if (!editingTodo.task.trim()) return;
-
-    try {
-      await fetch(API_URL, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingTodo),
-      });
-
-      setTodos(
-        todos.map((todo) => (todo.id === editingTodo.id ? editingTodo : todo)),
-      );
-      setEditingTodo(null);
-    } catch (err) {
-      console.error("Error saving edit:", err);
-    }
-  };
-
   const handleDeleteTodo = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this task?")) return;
-
     try {
-      await fetch(`${API_URL}?id=${id}`, { method: "DELETE" });
-      setTodos(todos.filter((todo) => todo.id !== id));
+      const res = await fetch(`${API_URL}?action=delete_task&id=${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (data.success || res.ok) {
+        setTodos((prev) => prev.filter((todo) => todo.id !== id));
+      }
     } catch (err) {
       console.error("Error deleting task:", err);
     }
   };
 
   const todayTasks = todos.filter(
-    (t) => t.due_date === getTodayString() && Number(t.completed) === 0,
+    (t) => t.due_date === getTodayString() && Number(t.completed) === 0
   );
   const overdueTasks = todos.filter((t) =>
-    isTaskOverdue(t.due_date, t.completed),
+    isTaskOverdue(t.due_date, t.completed)
   );
+  const completedTasks = todos.filter((t) => Number(t.completed) === 1);
+  const activeTasks = todos.filter((t) => Number(t.completed) === 0);
   const totalAlertsCount = overdueTasks.length + todayTasks.length;
-  const overdueCount = overdueTasks.length;
+
+  const progressPercentage = todos.length > 0 ? Math.round((completedTasks.length / todos.length) * 100) : 0;
 
   const filteredTodos = todos.filter((todo) => {
     const statusMatch =
       filter === "all"
         ? true
         : filter === "active"
-          ? Number(todo.completed) === 0
-          : Number(todo.completed) === 1;
+        ? Number(todo.completed) === 0
+        : Number(todo.completed) === 1;
 
     const itemProject = todo.project || todo.category || "Personal";
     const projectMatch =
       selectedProject === "all"
         ? true
         : selectedProject === "overdue"
-          ? isTaskOverdue(todo.due_date, todo.completed)
-          : itemProject.toLowerCase() === selectedProject.toLowerCase();
+        ? isTaskOverdue(todo.due_date, todo.completed)
+        : itemProject.toLowerCase() === selectedProject.toLowerCase();
 
     const taskText = todo.task || todo.title || "";
     const searchMatch = taskText
@@ -297,8 +343,64 @@ function App() {
       {isAuthModalOpen && (
         <AuthModal
           onLogin={handleLogin}
+          isLoading={isLoggingIn}
           onClose={() => setIsAuthModalOpen(false)}
         />
+      )}
+
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-100 dark:border-slate-700">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">
+              Edit Profile
+            </h3>
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.name}
+                  onChange={(e) =>
+                    setProfileForm({ ...profileForm, name: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={profileForm.email}
+                  onChange={(e) =>
+                    setProfileForm({ ...profileForm, email: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors shadow-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {currentView === "dashboard" && authUser && (
@@ -311,13 +413,12 @@ function App() {
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
             userProfile={userProfile}
-            onAvatarUpload={handleAvatarChange}
-            onOpenProfileModal={openProfileModal}
+            onOpenProfileModal={handleOpenProfileModal}
           />
 
           <main className="flex-1 p-4 md:p-8 w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row gap-8 transition-colors duration-200">
+            {/* Left Content Column */}
             <div className="flex-1 space-y-6">
-              {/* Header Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <button
@@ -329,19 +430,12 @@ function App() {
                   </button>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">
-                        Good Morning, {userProfile.name}! 👋
+                      <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white uppercase">
+                        Good morning, {userProfile.name.split(" ")[0]}! 👋
                       </h1>
-                      <button
-                        onClick={openProfileModal}
-                        className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 text-xs transition-colors"
-                        title="Edit Profile Details"
-                      >
-                        
-                      </button>
                     </div>
                     <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      Here is what you have on your plate today.
+                      Here's what's on your plate today.
                     </p>
                   </div>
                 </div>
@@ -466,7 +560,7 @@ function App() {
                 </div>
               </div>
 
-              {/* Task Input Form */}
+              {/* Task Creation Form */}
               <form
                 onSubmit={handleAddTodo}
                 className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-slate-700/60 transition-all"
@@ -520,7 +614,7 @@ function App() {
                 </div>
               </form>
 
-              {/* Filter Pills Header */}
+              {/* Task Header Tabs */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <h2 className="text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 capitalize">
@@ -551,7 +645,7 @@ function App() {
                 </div>
               </div>
 
-              {/* Task Feed */}
+              {/* Task List */}
               <div className="space-y-3">
                 {filteredTodos.length === 0 ? (
                   <div className="bg-white dark:bg-slate-800 p-8 sm:p-12 rounded-2xl border border-slate-100 dark:border-slate-700 text-center flex flex-col items-center justify-center space-y-3 animate-fade-in shadow-sm">
@@ -602,16 +696,15 @@ function App() {
                       text: "text-slate-500 dark:text-slate-400",
                       bg: "bg-slate-400",
                     };
-                    const itemPriority = todo.priority || "medium";
                     const overdue = isTaskOverdue(
                       todo.due_date,
-                      todo.completed,
+                      todo.completed
                     );
 
                     return (
                       <div
                         key={todo.id}
-                        className={`flex flex-wrap sm:flex-nowrap items-center justify-between p-3.5 sm:p-4 bg-white dark:bg-slate-800 rounded-2xl border shadow-sm transition-all duration-200 animate-fade-in ${
+                        className={`flex flex-col p-3.5 sm:p-4 bg-white dark:bg-slate-800 rounded-2xl border shadow-sm transition-all duration-200 animate-fade-in ${
                           overdue
                             ? "border-rose-200 dark:border-rose-900/50 bg-rose-50/30 dark:bg-rose-950/20"
                             : "border-slate-100 dark:border-slate-700/60"
@@ -621,89 +714,60 @@ function App() {
                             : "hover:border-slate-200 dark:hover:border-slate-600"
                         }`}
                       >
-                        <div className="flex items-center gap-3 flex-1 min-w-[200px] mr-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleToggleTodo(todo.id, todo.completed)
-                            }
-                            className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                              Number(todo.completed) === 1
-                                ? "bg-emerald-500 border-emerald-500 text-white scale-105"
-                                : "border-slate-300 dark:border-slate-600 hover:border-blue-500"
-                            }`}
-                          >
-                            {Number(todo.completed) === 1 && (
-                              <span className="text-xs font-bold">✓</span>
-                            )}
-                          </button>
-
-                          <div className="flex-1">
-                            <p
-                              className={`text-sm font-semibold transition-all ${
+                        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between w-full">
+                          <div className="flex items-center gap-3 flex-1 min-w-[200px] mr-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleToggleTodo(todo.id, todo.completed)
+                              }
+                              className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                                Number(todo.completed) === 1
+                                  ? "bg-emerald-500 border-emerald-500 text-white scale-105"
+                                  : "border-slate-300 dark:border-slate-600 hover:border-blue-500"
+                              }`}
+                            >
+                              {Number(todo.completed) === 1 && (
+                                <span className="text-xs font-bold">✓</span>
+                              )}
+                            </button>
+                            <span
+                              className={`text-sm font-medium ${
                                 Number(todo.completed) === 1
                                   ? "line-through text-slate-400 dark:text-slate-500"
-                                  : "text-slate-800 dark:text-slate-100"
+                                  : "text-slate-700 dark:text-slate-200"
                               }`}
                             >
                               {todo.task || todo.title}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span
-                                className={`w-2 h-2 rounded-sm ${color.bg}`}
-                              />
-                              <span
-                                className={`text-xs font-medium ${color.text}`}
-                              >
-                                {itemProject}
-                              </span>
-                            </div>
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${color.text} bg-slate-100 dark:bg-slate-700`}
+                            >
+                              {itemProject}
+                            </span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                              {formatDynamicDate(todo.due_date)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTodo(todo.id)}
+                              className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                              title="Delete task"
+                            >
+                              🗑️
+                            </button>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 mt-2 sm:mt-0 ml-auto sm:ml-0">
-                          <span
-                            className={`text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize transition-colors ${
-                              itemPriority === "high"
-                                ? "bg-rose-50 dark:bg-rose-950/60 text-rose-500 dark:text-rose-400"
-                                : itemPriority === "medium"
-                                  ? "bg-amber-50 dark:bg-amber-950/60 text-amber-500 dark:text-amber-400"
-                                  : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-500 dark:text-emerald-400"
-                            }`}
-                          >
-                            {itemPriority}
-                          </span>
-
-                          <span
-                            className={`text-xs font-medium min-w-[65px] text-right ${
-                              overdue
-                                ? "text-rose-500 dark:text-rose-400 font-bold"
-                                : "text-slate-400 dark:text-slate-500"
-                            }`}
-                          >
-                            {overdue
-                              ? "Overdue"
-                              : formatDynamicDate(todo.due_date)}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => setEditingTodo(todo)}
-                            className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 text-xs transition-colors p-1"
-                            title="Edit Task"
-                          >
-                            ✏️
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTodo(todo.id)}
-                            className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 text-sm transition-colors p-1"
-                            title="Delete Task"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        {/* Integrated Task Timer directly inside active tasks */}
+                        {Number(todo.completed) === 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/60">
+                            <TaskTimer dueDate={todo.due_date} />
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -711,280 +775,67 @@ function App() {
               </div>
             </div>
 
-            {/* Sidebar Overview Widget */}
-            <div className="w-full lg:w-80 space-y-6">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700/60 shadow-sm space-y-5">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                  Overview
-                </h3>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 dark:bg-slate-700/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                      Total Tasks
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">
-                      {todos.length}
+            {/* Right Sidebar Widget Column */}
+            <div className="w-full lg:w-80 space-y-6 shrink-0">
+              {/* Overview Metrics Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700/60">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                      Overview
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                      Your current task metrics
                     </p>
                   </div>
-                  <div className="bg-slate-50 dark:bg-slate-700/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                      Active
-                    </p>
-                    <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                      {todos.filter((t) => Number(t.completed) === 0).length}
-                    </p>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-slate-700/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                      Completed
-                    </p>
-                    <p className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 mt-1">
-                      {todos.filter((t) => Number(t.completed) === 1).length}
-                    </p>
-                  </div>
-                  <div
-                    onClick={() => setSelectedProject("overdue")}
-                    className="bg-slate-50 dark:bg-slate-700/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700 cursor-pointer hover:border-rose-200 dark:hover:border-rose-900 transition-colors"
-                  >
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                      Overdue
-                    </p>
-                    <p className="text-2xl font-bold text-rose-500 dark:text-rose-400 mt-1">
-                      {overdueCount}
-                    </p>
-                  </div>
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-full">
+                    {progressPercentage}% Completed
+                  </span>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-slate-500 dark:text-slate-400">
-                      Progress
-                    </span>
-                    <span className="text-blue-600 dark:text-blue-400 font-bold">
-                      {todos.length > 0
-                        ? Math.round(
-                            (todos.filter((t) => Number(t.completed) === 1)
-                              .length /
-                              todos.length) *
-                              100,
-                          )
-                        : 0}
-                      %
-                    </span>
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden mb-4">
+                  <div
+                    className="bg-blue-600 h-full transition-all duration-500 rounded-full"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+
+                {/* Grid Metrics */}
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                      Active
+                    </p>
+                    <p className="text-lg font-bold text-slate-700 dark:text-slate-200 mt-0.5">
+                      {activeTasks.length}
+                    </p>
                   </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-blue-600 dark:bg-blue-500 h-full rounded-full transition-all duration-500 ease-out"
-                      style={{
-                        width: `${
-                          todos.length > 0
-                            ? (todos.filter((t) => Number(t.completed) === 1)
-                                .length /
-                                todos.length) *
-                              100
-                            : 0
-                        }%`,
-                      }}
-                    />
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                      Done
+                    </p>
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {completedTasks.length}
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                      Overdue
+                    </p>
+                    <p className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {overdueTasks.length}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <MiniCalendar todos={todos} />
+              <MiniCalendar />
               <QuoteCard />
             </div>
           </main>
-
-          {/* Edit Profile Modal */}
-          {isProfileModalOpen && (
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-100 dark:border-slate-700 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">
-                    Edit Profile
-                  </h3>
-                  <button
-                    onClick={() => setIsProfileModalOpen(false)}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <form onSubmit={handleSaveProfile} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      value={profileForm.name}
-                      onChange={(e) =>
-                        setProfileForm({ ...profileForm, name: e.target.value })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={profileForm.email}
-                      onChange={(e) =>
-                        setProfileForm({
-                          ...profileForm,
-                          email: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsProfileModalOpen(false)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-xs font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-                    >
-                      Save Profile
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* Edit Task Modal */}
-          {editingTodo && (
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-100 dark:border-slate-700 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">
-                    Edit Task
-                  </h3>
-                  <button
-                    onClick={() => setEditingTodo(null)}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <form onSubmit={handleSaveEdit} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                      Task Description
-                    </label>
-                    <input
-                      type="text"
-                      value={editingTodo.task || editingTodo.title || ""}
-                      onChange={(e) =>
-                        setEditingTodo({ ...editingTodo, task: e.target.value })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                        Project
-                      </label>
-                      <select
-                        value={
-                          editingTodo.project ||
-                          editingTodo.category ||
-                          "Personal"
-                        }
-                        onChange={(e) =>
-                          setEditingTodo({
-                            ...editingTodo,
-                            project: e.target.value,
-                          })
-                        }
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-white focus:outline-none"
-                      >
-                        <option value="Personal">Personal</option>
-                        <option value="Work">Work</option>
-                        <option value="Study">Study</option>
-                        <option value="Shopping">Shopping</option>
-                        <option value="Fitness">Fitness</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                        Priority
-                      </label>
-                      <select
-                        value={editingTodo.priority || "medium"}
-                        onChange={(e) =>
-                          setEditingTodo({
-                            ...editingTodo,
-                            priority: e.target.value,
-                          })
-                        }
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-white focus:outline-none"
-                      >
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      value={editingTodo.due_date || ""}
-                      onChange={(e) =>
-                        setEditingTodo({
-                          ...editingTodo,
-                          due_date: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingTodo(null)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-xs font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-                    >
-                      Update Task
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </>
   );
 }
-
-export default App;
