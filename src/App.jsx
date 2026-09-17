@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import MiniCalendar from "./components/MiniCalendar";
 import QuoteCard from "./components/QuoteCard";
-import LandingPage from "./components/LandingPage";
+import LandingPage from "./components/landingPage";
 import AuthModal from "./components/AuthModal";
 import TaskTimer from "./components/TaskTimer";
 import "material-icons/iconfont/material-icons.css";
